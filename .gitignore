@@ -1,11 +1,14 @@
+###############################
 # Angular specific
+###############################
 /dist/
 /out-tsc/
 /tmp/
 /coverage/
 /e2e/test-output/
 /.angular/
-.angular/
+/.angular-cli.json
+/.ng/
 
 # Node modules and dependency files
 /node_modules/
@@ -15,10 +18,6 @@
 # Environment files
 /.env
 
-# Angular CLI and build artefacts
-/.angular-cli.json
-/.ng/
-
 # TypeScript cache
 *.tsbuildinfo
 
@@ -26,3 +25,26 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+###############################
+# .NET backend build output
+###############################
+bin/
+obj/
+
+###############################
+# SQLite Database
+###############################
+photolib.db
+*.db-shm
+*.db-wal
+
+###############################
+# EF Core design-time files
+###############################
+*.ide
+
+###############################
+# Local app settings
+###############################
+appsettings.Development.json
