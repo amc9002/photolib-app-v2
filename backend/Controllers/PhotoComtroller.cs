@@ -39,6 +39,14 @@ namespace PhotoLibApi.Controllers
                 .AsNoTracking()
                 .Where(p => p.GalleryId == galleryId)
                 .OrderBy(p => p.CreatedAtUtc)
+                // Minimal projection for gallery view:
+                // only data required to render thumbnails list
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Title,
+                    p.HasThumbnail
+                })
                 .ToListAsync();
 
             return Ok(photos);
@@ -71,6 +79,35 @@ namespace PhotoLibApi.Controllers
                 return NotFound();
 
             // Return file as-is
+            return PhysicalFile(
+                filePath,
+                "image/jpeg");
+        }
+
+        /// <summary>
+        /// Returns the thumbnail image file for a photo.
+        /// </summary>
+        /// <param name="id">Identifier of the photo.</param>
+        /// <response code="200">Thumbnail image returned.</response>
+        /// <response code="404">Thumbnail not found.</response>
+        [HttpGet("{id:guid}/thumbnail")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public IActionResult GetThumbnail(Guid id)
+        {
+            // Check that photo exists and has thumbnail
+            var photo = _db.Photos.Find(id);
+            if (photo == null || !photo.HasThumbnail)
+                return NotFound();
+
+            // Path to thumbnails directory
+            var thumbnailsDir = Path.Combine(_photosPath, "thumbnails");
+            // Full path to the file: {photoId}.jpg
+            var filePath = Path.Combine(thumbnailsDir, $"{id}.jpg");
+
+            if (!System.IO.File.Exists(filePath))
+                return NotFound();
+
             return PhysicalFile(
                 filePath,
                 "image/jpeg");
@@ -154,6 +191,7 @@ namespace PhotoLibApi.Controllers
             var originalsDir = Path.Combine(_photosPath, "originals");
             // Create directory if not exists
             Directory.CreateDirectory(originalsDir);
+
             // ull path to the file: {photoId}.jpg 
             var filePath = Path.Combine(originalsDir, $"{id}.jpg");
 
@@ -170,7 +208,7 @@ namespace PhotoLibApi.Controllers
             Directory.CreateDirectory(thumbnailsDir);
             // full path to thumbnail file: {photoId}.jpg
             var thumbnailPath = Path.Combine(thumbnailsDir, $"{id}.jpg");
-            // generate thumbnail
+
             using (var image = Image.Load(filePath))
             {
                 image.Mutate(x => x.Resize(new ResizeOptions

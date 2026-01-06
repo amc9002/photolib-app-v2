@@ -8,6 +8,15 @@ namespace PhotoLibApi.Models
     /// The actual image file is stored separately (e.g., in Blob storage),
     /// while this model holds descriptive information.
     /// </summary>
+    /// 
+    /// <remarks>
+    /// Storage note:
+    /// Currently, image files are stored on the local file system
+    /// and accessed via dedicated API endpoints.
+    /// In a future cloud-based architecture, this model may be extended
+    /// to reference external storage (e.g., Blob/S3) using storage keys
+    /// instead of direct URLs.
+    /// </remarks>
     public class Photo
     {
         /// <summary>
@@ -40,16 +49,6 @@ namespace PhotoLibApi.Models
         /// </summary>
         [Required]
         public Guid GalleryId { get; set; }
-
-        /// <summary>
-        /// URL of the original image file stored externally.
-        /// </summary>
-        public string? BlobUrl { get; set; }
-
-        /// <summary>
-        /// URL of the thumbnail image for quick display in lists.
-        /// </summary>
-        public string? ThumbnailUrl { get; set; }
 
         /// <summary>
         /// Optional metadata in JSON form (e.g., EXIF information).
