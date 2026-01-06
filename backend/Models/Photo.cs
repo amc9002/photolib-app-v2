@@ -79,5 +79,16 @@ namespace PhotoLibApi.Models
         /// </summary>
         [Timestamp]
         public byte[]? RowVersion { get; set; }
+
+        /// <summary>
+        /// Indicates whether the original image file exists on the server.
+        /// </summary>
+        public bool HasOriginal { get; set; } = false;
+
+        /// <summary>
+        /// Indicates whether a thumbnail image exists for this photo.
+        /// </summary>
+        public bool HasThumbnail { get; set; } = false;
+
     }
 }

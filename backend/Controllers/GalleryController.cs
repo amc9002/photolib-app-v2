@@ -39,5 +39,60 @@ namespace PhotoLibApi.Controllers
 
             return Ok(list);
         }
+
+        /// <summary>
+        /// Creates a new gallery.
+        /// </summary>
+        ///  <remarks>
+        /// Currently, the gallery is created without authentication.
+        /// OwnerId will be null until authentication is added.
+        /// </remarks>
+        /// <response code="201">Gallery created successfully.</response>
+        /// <response code="400">Invalid request data.</response>
+        [HttpPost]
+        [ProducesResponseType(StatusCodes.Status201Created)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<Gallery>> Create(
+            [FromBody] CreateGalleryRequest request)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var gallery = new Gallery
+            {
+                Id = Guid.NewGuid(),
+                Title = request.Title,
+                OwnerId = User?.Identity?.Name,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+
+            _db.Galleries.Add(gallery);
+            await _db.SaveChangesAsync();
+
+            return CreatedAtAction(nameof(GetAll), gallery);
+        }
+
+        /// <summary>
+        /// Deletes a gallery by its identifier.
+        /// </summary>
+        /// <param name="id">Gallery identifier.</param>
+        /// <response code="204">Gallery deleted successfully.</response>
+        /// <response code="404">Gallery not found.</response>
+        [HttpDelete("{id:guid}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            var gallery = await _db.Galleries.FindAsync(id);
+
+            if (gallery == null)
+                return NotFound();
+
+            _db.Galleries.Remove(gallery);
+            await _db.SaveChangesAsync();
+
+            return NoContent();
+        }
+
     }
 }
