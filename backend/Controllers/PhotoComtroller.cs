@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PhotoLibApi.Data;
 using PhotoLibApi.Models;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Processing;
 
 namespace PhotoLibApi.Controllers
 {
@@ -59,11 +61,10 @@ namespace PhotoLibApi.Controllers
             if (photo == null || !photo.HasOriginal)
                 return NotFound();
 
-            // Directory where photos are stored
-            var uploadsDir = _photosPath;
-
-            // File path: {photoId}.jpg
-            var filePath = Path.Combine(uploadsDir, $"{id}.jpg");
+            // Path to originals directory
+            var originalsDir = Path.Combine(_photosPath, "originals");
+            // Full path to the file: {photoId}.jpg
+            var filePath = Path.Combine(originalsDir, $"{id}.jpg");
 
             // Check if file exists
             if (!System.IO.File.Exists(filePath))
@@ -74,7 +75,6 @@ namespace PhotoLibApi.Controllers
                 filePath,
                 "image/jpeg");
         }
-
 
         /// <summary>
         /// Creates a photo metadata record.
@@ -141,30 +141,49 @@ namespace PhotoLibApi.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Upload(Guid id, IFormFile file)
         {
-            // 1️⃣ Validate file
+            // Validate file
             if (file == null || file.Length == 0)
                 return BadRequest("File is required.");
 
-            // 2️⃣ Check: photo exists in DB
+            // Check: photo exists in DB
             var photo = await _db.Photos.FindAsync(id);
             if (photo == null)
                 return NotFound();
 
-            // 3️⃣ Target directory for uploaded photos
-            var uploadsDir = _photosPath;
+            // Target directory for uploaded photos
+            var originalsDir = Path.Combine(_photosPath, "originals");
+            // Create directory if not exists
+            Directory.CreateDirectory(originalsDir);
+            // ull path to the file: {photoId}.jpg 
+            var filePath = Path.Combine(originalsDir, $"{id}.jpg");
 
-            // 4️⃣ Create directory if not exists
-            Directory.CreateDirectory(uploadsDir);
-
-            // 5️⃣ Full path to the file: {photoId}.jpg 
-            var filePath = Path.Combine(uploadsDir, $"{id}.jpg");
-
-            // 6️⃣ Save file to disk
+            // Save file to disk
             await using var stream = System.IO.File.Create(filePath);
             await file.CopyToAsync(stream);
 
-            // mark that original file exists
+            // mark original as existing
             photo.HasOriginal = true;
+
+
+            // create thumbnail
+            var thumbnailsDir = Path.Combine(_photosPath, "thumbnails");
+            Directory.CreateDirectory(thumbnailsDir);
+            // full path to thumbnail file: {photoId}.jpg
+            var thumbnailPath = Path.Combine(thumbnailsDir, $"{id}.jpg");
+            // generate thumbnail
+            using (var image = Image.Load(filePath))
+            {
+                image.Mutate(x => x.Resize(new ResizeOptions
+                {
+                    Size = new Size(300, 300),
+                    Mode = ResizeMode.Max
+                }));
+
+                image.Save(thumbnailPath);
+            }
+
+            // mark thumbnail as existing
+            photo.HasThumbnail = true;
             await _db.SaveChangesAsync();
 
             return NoContent();
