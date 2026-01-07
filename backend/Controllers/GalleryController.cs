@@ -43,6 +43,58 @@ namespace PhotoLibApi.Controllers
             return Ok(galleries);
         }
 
+#if DEBUG
+        /// <summary>
+        /// DEV: Returns all galleries, including deleted ones.
+        /// </summary>
+        [HttpGet("dev")]
+        public async Task<IActionResult> DevGetAll()
+        {
+            var ownerId = User?.Identity?.Name;
+
+            var galleries = await _db.Galleries
+                .AsNoTracking()
+                .Where(g => g.OwnerId == ownerId)
+                .OrderBy(g => g.CreatedAtUtc)
+                .Select(g => new
+                {
+                    g.Id,
+                    g.Title,
+                    g.IsDeleted,
+                    g.CreatedAtUtc,
+                    g.UpdatedAtUtc
+                })
+                .ToListAsync();
+
+            return Ok(galleries);
+        }
+#endif
+
+#if DEBUG
+        /// <summary>
+        /// DEV: Returns deleted galleries only.
+        /// </summary>
+        [HttpGet("dev/deleted")]
+        public async Task<IActionResult> DevGetDeleted()
+        {
+            var ownerId = User?.Identity?.Name;
+
+            var galleries = await _db.Galleries
+                .AsNoTracking()
+                .Where(g => g.OwnerId == ownerId && g.IsDeleted)
+                .OrderBy(g => g.UpdatedAtUtc)
+                .Select(g => new
+                {
+                    g.Id,
+                    g.Title,
+                    g.UpdatedAtUtc
+                })
+                .ToListAsync();
+
+            return Ok(galleries);
+        }
+#endif
+
         /// <summary>
         /// Returns gallery metadata by identifier.
         /// </summary>
@@ -130,6 +182,30 @@ namespace PhotoLibApi.Controllers
 
             return NoContent();
         }
+
+#if DEBUG
+        /// <summary>
+        /// ADMIN: Permanently deletes a gallery.
+        /// </summary>
+        /// <param name="id">Gallery identifier.</param>
+        /// <response code="204">Gallery permanently deleted.</response>
+        /// <response code="404">Gallery not found.</response>
+        [HttpDelete("admin/{id:guid}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> AdminHardDelete(Guid id)
+        {
+            var gallery = await _db.Galleries.FindAsync(id);
+
+            if (gallery == null)
+                return NotFound();
+
+            _db.Galleries.Remove(gallery);
+            await _db.SaveChangesAsync();
+
+            return NoContent();
+        }
+#endif
 
     }
 }
