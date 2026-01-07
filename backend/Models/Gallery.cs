@@ -31,6 +31,17 @@ namespace PhotoLibApi.Models
         /// Timestamp of when the gallery was created (UTC).
         /// </summary>
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Marks the gallery as deleted without removing it from the database.
+        /// </summary>
+        public bool IsDeleted { get; set; } = false;
+
+        /// <summary>
+        /// Timestamp of the latest update (UTC).
+        /// Used to detect changes during synchronization.
+        /// </summary>
+        public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
     }
 }
 

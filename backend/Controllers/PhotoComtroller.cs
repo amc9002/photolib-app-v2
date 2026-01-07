@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PhotoLibApi.Data;
 using PhotoLibApi.Models;
+using PhotoLibApi.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 
@@ -15,15 +16,18 @@ namespace PhotoLibApi.Controllers
     public class PhotoController : ControllerBase
     {
         private readonly PhotoDbContext _db;
-        private readonly string _photosPath;
+        private readonly PhotoFilePathHelper _filePathHelper;
+
 
         public PhotoController(PhotoDbContext db, IConfiguration configuration)
         {
             _db = db;
 
-            _photosPath = Path.Combine(
+            var photosRoot = Path.Combine(
                 Directory.GetCurrentDirectory(),
                 configuration["Storage:PhotosPath"]!);
+
+            _filePathHelper = new PhotoFilePathHelper(photosRoot);
         }
 
         /// <summary>
@@ -52,6 +56,7 @@ namespace PhotoLibApi.Controllers
             return Ok(photos);
         }
 
+#if DEBUG
         /// <summary>
         /// DEV: Returns all photos in a gallery, including deleted ones.
         /// </summary>
@@ -74,7 +79,9 @@ namespace PhotoLibApi.Controllers
 
             return Ok(photos);
         }
+#endif
 
+#if DEBUG
         /// <summary>
         /// DEV: Returns deleted photos in a gallery.
         /// </summary>
@@ -95,6 +102,7 @@ namespace PhotoLibApi.Controllers
 
             return Ok(photos);
         }
+#endif  
 
         /// <summary>
         /// Returns photo metadata by identifier.
@@ -147,10 +155,7 @@ namespace PhotoLibApi.Controllers
             if (photo == null || !photo.HasOriginal)
                 return NotFound();
 
-            // Path to originals directory
-            var originalsDir = Path.Combine(_photosPath, "originals");
-            // Full path to the file: {photoId}.jpg
-            var filePath = Path.Combine(originalsDir, $"{id}.jpg");
+            var filePath = _filePathHelper.GetOriginalFilePath(id);
 
             // Check if file exists
             if (!System.IO.File.Exists(filePath))
@@ -178,11 +183,8 @@ namespace PhotoLibApi.Controllers
             if (photo == null || !photo.HasThumbnail)
                 return NotFound();
 
-            // Path to thumbnails directory
-            var thumbnailsDir = Path.Combine(_photosPath, "thumbnails");
-            // Full path to the file: {photoId}.jpg
-            var filePath = Path.Combine(thumbnailsDir, $"{id}.jpg");
-
+            var filePath = _filePathHelper.GetThumbnailFilePath(id);
+            // Check if file exists
             if (!System.IO.File.Exists(filePath))
                 return NotFound();
 
@@ -265,13 +267,9 @@ namespace PhotoLibApi.Controllers
             if (photo == null)
                 return NotFound();
 
-            // Target directory for uploaded photos
-            var originalsDir = Path.Combine(_photosPath, "originals");
-            // Create directory if not exists
-            Directory.CreateDirectory(originalsDir);
-
-            // ull path to the file: {photoId}.jpg 
-            var filePath = Path.Combine(originalsDir, $"{id}.jpg");
+            // Ensure originals directory exists
+            Directory.CreateDirectory(_filePathHelper.GetOriginalsDirectory());
+            var filePath = _filePathHelper.GetOriginalFilePath(id);
 
             // Save file to disk
             await using var stream = System.IO.File.Create(filePath);
@@ -280,13 +278,10 @@ namespace PhotoLibApi.Controllers
             // mark original as existing
             photo.HasOriginal = true;
 
-
-            // create thumbnail
-            var thumbnailsDir = Path.Combine(_photosPath, "thumbnails");
-            Directory.CreateDirectory(thumbnailsDir);
-            // full path to thumbnail file: {photoId}.jpg
-            var thumbnailPath = Path.Combine(thumbnailsDir, $"{id}.jpg");
-
+            // Generate and save thumbnail
+            Directory.CreateDirectory(_filePathHelper.GetThumbnailsDirectory());
+            var thumbnailPath = _filePathHelper.GetThumbnailFilePath(id);
+            // Generate thumbnail
             using (var image = Image.Load(filePath))
             {
                 image.Mutate(x => x.Resize(new ResizeOptions
@@ -360,5 +355,34 @@ namespace PhotoLibApi.Controllers
 
             return NoContent();
         }
+
+#if DEBUG
+        /// <summary>
+        /// ADMIN: Permanently deletes a photo and its files.
+        /// </summary>
+        /// <param name="id">Photo identifier.</param>
+        /// <response code="204">Photo permanently deleted.</response>
+        /// <response code="404">Photo not found.</response>
+        [HttpDelete("admin/{id:guid}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> AdminHardDelete(Guid id)
+        {
+            var photo = await _db.Photos.FindAsync(id);
+
+            if (photo == null)
+                return NotFound();
+
+            // IO-operations are isolated in the helper
+            _filePathHelper.DeleteOriginal(id);
+            _filePathHelper.DeleteThumbnail(id);
+
+            _db.Photos.Remove(photo);
+            await _db.SaveChangesAsync();
+
+            return NoContent();
+        }
+#endif  
+
     }
 }

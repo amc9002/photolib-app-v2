@@ -34,10 +34,44 @@ namespace PhotoLibApi.Controllers
             // simple owner resolution: use authenticated user name or null for local testing
             var ownerId = User?.Identity?.Name;
 
-            var q = _db.Galleries.AsNoTracking().Where(g => g.OwnerId == ownerId);
-            var list = await q.OrderBy(g => g.CreatedAtUtc).ToListAsync();
+            var galleries = await _db.Galleries
+                .AsNoTracking()
+                .Where(g => g.OwnerId == ownerId && !g.IsDeleted)
+                .OrderBy(g => g.CreatedAtUtc)
+                .ToListAsync();
 
-            return Ok(list);
+            return Ok(galleries);
+        }
+
+        /// <summary>
+        /// Returns gallery metadata by identifier.
+        /// </summary>
+        /// <param name="id">Gallery identifier.</param>
+        /// <response code="200">Gallery metadata returned.</response>
+        /// <response code="404">Gallery not found.</response>
+        [HttpGet("{id:guid}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            var ownerId = User?.Identity?.Name;
+
+            var gallery = await _db.Galleries
+                .AsNoTracking()
+                .Where(g => g.Id == id && g.OwnerId == ownerId && !g.IsDeleted)
+                .Select(g => new
+                {
+                    g.Id,
+                    g.Title,
+                    g.CreatedAtUtc,
+                    g.UpdatedAtUtc
+                })
+                .FirstOrDefaultAsync();
+
+            if (gallery == null)
+                return NotFound();
+
+            return Ok(gallery);
         }
 
         /// <summary>
@@ -63,7 +97,8 @@ namespace PhotoLibApi.Controllers
                 Id = Guid.NewGuid(),
                 Title = request.Title,
                 OwnerId = User?.Identity?.Name,
-                CreatedAtUtc = DateTime.UtcNow
+                CreatedAtUtc = DateTime.UtcNow,
+                UpdatedAtUtc = DateTime.UtcNow
             };
 
             _db.Galleries.Add(gallery);
@@ -73,7 +108,7 @@ namespace PhotoLibApi.Controllers
         }
 
         /// <summary>
-        /// Deletes a gallery by its identifier.
+        /// Soft-deletes a gallery by marking it as deleted.
         /// </summary>
         /// <param name="id">Gallery identifier.</param>
         /// <response code="204">Gallery deleted successfully.</response>
@@ -85,10 +120,12 @@ namespace PhotoLibApi.Controllers
         {
             var gallery = await _db.Galleries.FindAsync(id);
 
-            if (gallery == null)
+            if (gallery == null || gallery.IsDeleted)
                 return NotFound();
 
-            _db.Galleries.Remove(gallery);
+            gallery.IsDeleted = true;
+            gallery.UpdatedAtUtc = DateTime.UtcNow;
+
             await _db.SaveChangesAsync();
 
             return NoContent();
