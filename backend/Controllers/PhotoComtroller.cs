@@ -37,7 +37,7 @@ namespace PhotoLibApi.Controllers
         {
             var photos = await _db.Photos
                 .AsNoTracking()
-                .Where(p => p.GalleryId == galleryId)
+                .Where(p => p.GalleryId == galleryId && !p.IsDeleted)
                 .OrderBy(p => p.CreatedAtUtc)
                 // Minimal projection for gallery view:
                 // only data required to render thumbnails list
@@ -50,6 +50,84 @@ namespace PhotoLibApi.Controllers
                 .ToListAsync();
 
             return Ok(photos);
+        }
+
+        /// <summary>
+        /// DEV: Returns all photos in a gallery, including deleted ones.
+        /// </summary>
+        [HttpGet("dev/by-gallery/{galleryId:guid}")]
+        public async Task<IActionResult> DevGetAllByGallery(Guid galleryId)
+        {
+            var photos = await _db.Photos
+                .AsNoTracking()
+                .Where(p => p.GalleryId == galleryId)
+                .OrderBy(p => p.CreatedAtUtc)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Title,
+                    p.IsDeleted,
+                    p.HasOriginal,
+                    p.HasThumbnail
+                })
+                .ToListAsync();
+
+            return Ok(photos);
+        }
+
+        /// <summary>
+        /// DEV: Returns deleted photos in a gallery.
+        /// </summary>
+        [HttpGet("dev/deleted/by-gallery/{galleryId:guid}")]
+        public async Task<IActionResult> DevGetDeletedByGallery(Guid galleryId)
+        {
+            var photos = await _db.Photos
+                .AsNoTracking()
+                .Where(p => p.GalleryId == galleryId && p.IsDeleted)
+                .OrderBy(p => p.UpdatedAtUtc)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Title,
+                    p.UpdatedAtUtc
+                })
+                .ToListAsync();
+
+            return Ok(photos);
+        }
+
+        /// <summary>
+        /// Returns photo metadata by identifier.
+        /// </summary>
+        /// <param name="id">Photo identifier.</param>
+        /// <response code="200">Photo metadata returned.</response>
+        /// <response code="404">Photo not found.</response>
+        [HttpGet("{id:guid}")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetById(Guid id)
+        {
+            var photo = await _db.Photos
+                .AsNoTracking()
+                .Where(p => p.Id == id)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.GalleryId,
+                    p.Title,
+                    p.Description,
+                    p.CreatedAtUtc,
+                    p.UpdatedAtUtc,
+                    p.HasOriginal,
+                    p.HasThumbnail,
+                    p.IsDeleted
+                })
+                .FirstOrDefaultAsync();
+
+            if (photo == null)
+                return NotFound();
+
+            return Ok(photo);
         }
 
         /// <summary>
@@ -260,10 +338,10 @@ namespace PhotoLibApi.Controllers
         }
 
         /// <summary>
-        /// Deletes a photo by its identifier.
+        /// Soft-deletes a photo by marking it as deleted.
         /// </summary>
         /// <param name="id">Photo identifier.</param>
-        /// <response code="204">Photo deleted successfully.</response>
+        /// <response code="204">Photo marked as deleted.</response>
         /// <response code="404">Photo not found.</response>
         [HttpDelete("{id:guid}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -272,14 +350,15 @@ namespace PhotoLibApi.Controllers
         {
             var photo = await _db.Photos.FindAsync(id);
 
-            if (photo == null)
+            if (photo == null || photo.IsDeleted)
                 return NotFound();
 
-            _db.Photos.Remove(photo);
+            photo.IsDeleted = true;
+            photo.UpdatedAtUtc = DateTime.UtcNow;
+
             await _db.SaveChangesAsync();
 
             return NoContent();
         }
-
     }
 }

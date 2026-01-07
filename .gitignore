@@ -15,6 +15,10 @@
 /package-lock.json
 /yarn.lock
 
+# Uploaded files (generated at runtime)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
 # Environment files
 /.env
 
